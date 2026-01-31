@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(npx create-astro@latest vnas-app --template basics --typescript strict --install --no-git -y)",
+      "Bash(npx astro:*)",
+      "Bash(npm run build:*)"
+    ]
+  }
+}

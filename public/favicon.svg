@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Outer ring -->
+  <circle cx="50" cy="50" r="45" fill="none" stroke="#5DD3D3" stroke-width="3"/>
+  <!-- Inner ring -->
+  <circle cx="50" cy="50" r="30" fill="none" stroke="#3B5A8A" stroke-width="2"/>
+  <!-- Center ring -->
+  <circle cx="50" cy="50" r="15" fill="none" stroke="#2A3B5C" stroke-width="1"/>
+  <!-- Center blip -->
+  <circle cx="50" cy="50" r="5" fill="#5DD3D3"/>
+  <!-- Sweep line -->
+  <line x1="50" y1="50" x2="50" y2="5" stroke="#5DD3D3" stroke-width="2" stroke-linecap="round">
+    <animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="3s" repeatCount="indefinite"/>
+  </line>
+  <!-- Blips -->
+  <circle cx="70" cy="35" r="3" fill="#5DD3D3" opacity="0.8"/>
+  <circle cx="30" cy="65" r="2" fill="#5DD3D3" opacity="0.6"/>
+  <circle cx="65" cy="70" r="2.5" fill="#5DD3D3" opacity="0.7"/>
+</svg>

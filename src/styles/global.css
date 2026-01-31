@@ -1,0 +1,379 @@
+@import "tailwindcss";
+
+/* ATC Assist Design System - Derived from Radar Logo */
+@theme {
+  /* Primary Palette - Deep Navy Foundation */
+  --color-radar-900: #0D1117;    /* Deepest background */
+  --color-radar-800: #151B2D;    /* Main background (logo outer ring) */
+  --color-radar-700: #1E2942;    /* Card surfaces */
+  --color-radar-600: #2A3B5C;    /* Borders, grid lines */
+  --color-radar-500: #3B5A8A;    /* Sweep gradient, hover states */
+  --color-radar-400: #4A6FA5;    /* Secondary accents */
+  --color-radar-300: #7B9CC7;    /* Light text */
+  --color-radar-200: #A8BFE0;    /* Lighter text */
+  --color-radar-100: #D1E0F5;    /* Lightest text */
+
+  /* Accent - Cyan Blip (from radar blips) */
+  --color-blip-500: #5DD3D3;     /* Primary accent */
+  --color-blip-400: #7EDDDD;     /* Hover state */
+  --color-blip-600: #3FBFBF;     /* Active/pressed */
+  --color-blip-300: #A8EBEB;     /* Subtle highlights */
+
+  /* Semantic Colors (Aviation Standard - preserved) */
+  --color-vfr: #22C55E;          /* Green - VFR */
+  --color-mvfr: #3B82F6;         /* Blue - MVFR */
+  --color-ifr: #EF4444;          /* Red - IFR */
+  --color-lifr: #A855F7;         /* Magenta - LIFR */
+
+  /* Status Colors */
+  --color-detected: #22C55E;     /* App found */
+  --color-configured: #F59E0B;   /* Manual config / Last Used */
+  --color-notfound: #EF4444;     /* App missing */
+
+  /* Animation Timing */
+  --ease-radar: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Radar sweep animation for loading states */
+@keyframes radar-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Subtle pulse for blips/accents */
+@keyframes blip-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Fade in animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Card hover lift */
+@keyframes card-lift {
+  from {
+    transform: translateY(0);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
+  }
+  to {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.4);
+  }
+}
+
+.animate-radar-sweep {
+  animation: radar-sweep 3s linear infinite;
+}
+
+.animate-blip-pulse {
+  animation: blip-pulse 2s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s var(--ease-radar) forwards;
+}
+
+/* Staggered animation delays for lists */
+.animate-stagger-1 { animation-delay: 0.05s; }
+.animate-stagger-2 { animation-delay: 0.1s; }
+.animate-stagger-3 { animation-delay: 0.15s; }
+.animate-stagger-4 { animation-delay: 0.2s; }
+.animate-stagger-5 { animation-delay: 0.25s; }
+.animate-stagger-6 { animation-delay: 0.3s; }
+
+/* Print styles */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    background: white !important;
+    color: #1a1a1a !important;
+    font-size: 9pt !important;
+    line-height: 1.3 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .no-print, header, footer, .tab-btn, #tab-nav, nav, #print-modal {
+    display: none !important;
+  }
+
+  .print-break {
+    page-break-before: always;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid;
+  }
+
+  /* Hide sections not selected for print */
+  .print-section:not(.print-selected) {
+    display: none !important;
+  }
+
+  /* Show all selected sections */
+  .print-section.print-selected {
+    display: block !important;
+  }
+
+  /* Reset containers - remove borders and padding bloat */
+  .card, [class*="bg-radar"], .tab-panel, .tab-panel > div {
+    background: white !important;
+    border: none !important;
+    color: #1a1a1a !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 0 12px 0 !important;
+  }
+
+  /* Compact section spacing */
+  .space-y-6 > * + * {
+    margin-top: 8px !important;
+  }
+
+  /* Text colors */
+  .text-blip-500, .text-blip-400 {
+    color: #0066cc !important;
+  }
+
+  .font-mono {
+    color: #1a1a1a !important;
+    font-family: "Courier New", monospace !important;
+    font-size: 8pt !important;
+  }
+
+  .text-radar-100, .text-radar-200 {
+    color: #1a1a1a !important;
+  }
+
+  .text-radar-300, .text-radar-400, .text-radar-500 {
+    color: #4a4a4a !important;
+  }
+
+  /* Headers */
+  h1, h2, h3, h4, h5, h6 {
+    color: #1a1a1a !important;
+    margin: 0 0 6px 0 !important;
+    page-break-after: avoid !important;
+  }
+
+  h1 { font-size: 14pt !important; }
+  h2 {
+    font-size: 11pt !important;
+    border-bottom: 1px solid #0066cc !important;
+    padding-bottom: 3px !important;
+    margin-bottom: 8px !important;
+  }
+  h3 { font-size: 10pt !important; }
+
+  /* Hide SVG icons in headers */
+  h2 svg, h3 svg {
+    display: none !important;
+  }
+
+  a {
+    color: #0066cc !important;
+    text-decoration: none !important;
+  }
+
+  /* Compact table styles */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    font-size: 8pt !important;
+    margin: 4px 0 !important;
+  }
+
+  th, td {
+    border: 1px solid #ccc !important;
+    padding: 3px 6px !important;
+    color: #1a1a1a !important;
+    background: white !important;
+    text-align: left !important;
+  }
+
+  th {
+    background: #f0f0f0 !important;
+    font-weight: 600 !important;
+    font-size: 7pt !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.3px !important;
+  }
+
+  tr:nth-child(even) td {
+    background: #fafafa !important;
+  }
+
+  /* Compact grid layout */
+  .grid {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    margin: 6px 0 !important;
+  }
+
+  .grid > div, .grid > a {
+    flex: 0 0 calc(33.333% - 4px) !important;
+    background: #f8f8f8 !important;
+    border: 1px solid #ddd !important;
+    border-radius: 3px !important;
+    padding: 6px 8px !important;
+    margin: 0 !important;
+    page-break-inside: avoid !important;
+    font-size: 8pt !important;
+  }
+
+  /* Two column for larger items */
+  .grid.md\\:grid-cols-2 > div,
+  .grid.md\\:grid-cols-2 > a {
+    flex: 0 0 calc(50% - 3px) !important;
+  }
+
+  /* Four column for small items */
+  .grid.lg\\:grid-cols-4 > div {
+    flex: 0 0 calc(25% - 5px) !important;
+  }
+
+  /* Inline tags/badges - cleaner without borders */
+  .flex.flex-wrap.gap-2 > span,
+  .flex.flex-wrap.gap-2 > a {
+    background: #f0f0f0 !important;
+    border: none !important;
+    color: #1a1a1a !important;
+    padding: 2px 6px !important;
+    margin: 1px !important;
+    display: inline-block !important;
+    font-size: 8pt !important;
+    border-radius: 2px !important;
+  }
+
+  /* Type badges */
+  span[class*="bg-blip"], span[class*="bg-mvfr"], span[class*="bg-vfr"] {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 2px 0 0 !important;
+    font-weight: 600 !important;
+    font-size: 7pt !important;
+  }
+
+  span[class*="bg-blip"] { color: #0066cc !important; }
+  span[class*="bg-mvfr"] { color: #2563eb !important; }
+  span[class*="bg-vfr"] { color: #16a34a !important; }
+
+  /* Print header */
+  .print-header {
+    display: block !important;
+    border-bottom: 2px solid #0066cc !important;
+    padding-bottom: 8px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .print-header h1 {
+    font-size: 16pt !important;
+    margin: 0 !important;
+    color: #1a1a1a !important;
+  }
+
+  .print-header p {
+    font-size: 9pt !important;
+    color: #666 !important;
+    margin: 2px 0 0 0 !important;
+  }
+
+  /* Hide scrollbars and overflow indicators */
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  /* Ensure hidden tabs are shown when selected */
+  .tab-panel.hidden.print-selected {
+    display: block !important;
+  }
+
+  /* Remove rounded corners for print */
+  .rounded, .rounded-lg, .rounded-md {
+    border-radius: 0 !important;
+  }
+
+  /* Compact the stats grid in header */
+  .grid.grid-cols-2 {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    border-top: 1px solid #ddd !important;
+    padding-top: 8px !important;
+    margin-top: 8px !important;
+  }
+
+  .grid.grid-cols-2 > div {
+    flex: 0 0 auto !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 12px 0 0 !important;
+    text-align: left !important;
+  }
+
+  .grid.grid-cols-2 > div .text-2xl {
+    font-size: 12pt !important;
+    font-weight: 700 !important;
+    color: #0066cc !important;
+    display: inline !important;
+  }
+
+  .grid.grid-cols-2 > div .text-xs {
+    font-size: 8pt !important;
+    display: inline !important;
+    margin-left: 4px !important;
+  }
+
+  /* Hide sub-facility links cards - just show as list */
+  #tab-facilities .grid > a {
+    display: block !important;
+    flex: none !important;
+    width: 100% !important;
+    padding: 4px 0 !important;
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid #eee !important;
+  }
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-radar-800);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-radar-600);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-radar-500);
+}

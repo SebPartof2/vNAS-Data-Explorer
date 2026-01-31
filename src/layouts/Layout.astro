@@ -1,0 +1,68 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'Explore vNAS VATSIM facility data with ATC Assist' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} | ATC Assist vNAS Explorer</title>
+
+    <!-- Print-specific styles -->
+    <style>
+      @media print {
+        @page {
+          size: A4;
+          margin: 1cm;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-radar-900 text-radar-100 min-h-screen">
+    <header class="bg-radar-800 border-b border-radar-600 no-print sticky top-0 z-50">
+      <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-3 hover:opacity-80 transition-opacity">
+          <img src="/logo.png" alt="ATC Assist" class="h-10 w-auto" />
+          <div>
+            <h1 class="text-xl font-bold text-radar-100">ATC Assist</h1>
+            <p class="text-xs text-radar-400">vNAS Data Explorer</p>
+          </div>
+        </a>
+
+        <nav class="flex items-center gap-4">
+          <a href="/" class="text-radar-300 hover:text-blip-400 transition-colors text-sm">
+            Home
+          </a>
+          <a href="https://atcassist.com" target="_blank" rel="noopener noreferrer" class="text-radar-300 hover:text-blip-400 transition-colors text-sm">
+            ATC Assist
+          </a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-6">
+      <slot />
+    </main>
+
+    <footer class="bg-radar-800 border-t border-radar-600 mt-auto no-print">
+      <div class="max-w-7xl mx-auto px-4 py-4 text-center text-radar-400 text-sm">
+        <p>
+          Powered by <a href="https://atcassist.com" target="_blank" rel="noopener noreferrer" class="text-blip-500 hover:text-blip-400 transition-colors">ATC Assist</a>
+          &bull; Data from <a href="https://vnas.vatsim.net" target="_blank" rel="noopener noreferrer" class="text-blip-500 hover:text-blip-400 transition-colors">vNAS VATSIM</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

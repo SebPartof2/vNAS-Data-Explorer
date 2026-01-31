@@ -1,0 +1,56 @@
+---
+interface Props {
+  facility: any;
+  artccId: string;
+  depth?: number;
+  currentFacilityId?: string;
+}
+
+const { facility, artccId, depth = 0, currentFacilityId } = Astro.props;
+const indent = depth * 20;
+const isCurrentFacility = facility.id === currentFacilityId;
+const href = facility.type === 'ARTCC' ? `/facility/${artccId}` : `/facility/${artccId}/${facility.id}`;
+
+import FacilityTree from './FacilityTree.astro';
+---
+
+<div class="facility-tree-item" style={`margin-left: ${indent}px`}>
+  <a
+    href={href}
+    class:list={[
+      'flex items-center gap-2 py-1.5 px-3 rounded transition-colors text-sm',
+      {
+        'bg-blip-500/20 border border-blip-500/50': isCurrentFacility,
+        'hover:bg-radar-700/50': !isCurrentFacility,
+      }
+    ]}
+  >
+    <span class:list={[
+      'px-1.5 py-0.5 rounded text-xs font-medium shrink-0',
+      {
+        'bg-blip-500/20 text-blip-500': facility.type === 'ARTCC',
+        'bg-mvfr/20 text-mvfr': facility.type === 'TRACON',
+        'bg-vfr/20 text-vfr': facility.type === 'ATCT',
+        'bg-radar-600 text-radar-300': !['ARTCC', 'TRACON', 'ATCT'].includes(facility.type),
+      }
+    ]}>{facility.type}</span>
+    <span class:list={[
+      'font-mono shrink-0',
+      { 'text-blip-400': !isCurrentFacility, 'text-blip-300 font-semibold': isCurrentFacility }
+    ]}>{facility.id}</span>
+    <span class:list={[
+      'truncate',
+      { 'text-radar-200': !isCurrentFacility, 'text-radar-100': isCurrentFacility }
+    ]}>{facility.name}</span>
+    {facility.positions?.length > 0 && (
+      <span class="text-radar-500 text-xs shrink-0">({facility.positions.length})</span>
+    )}
+    {facility.childFacilities?.length > 0 && (
+      <span class="text-radar-500 text-xs shrink-0 ml-auto">{facility.childFacilities.length} sub</span>
+    )}
+  </a>
+</div>
+
+{facility.childFacilities?.map((child: any) => (
+  <FacilityTree facility={child} artccId={artccId} depth={depth + 1} currentFacilityId={currentFacilityId} />
+))}

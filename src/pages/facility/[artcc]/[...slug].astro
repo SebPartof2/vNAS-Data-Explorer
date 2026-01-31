@@ -1,0 +1,1059 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import FacilityTree from '../../../components/FacilityTree.astro';
+import {
+  fetchArtcc,
+  fetchArtccList,
+  formatFrequency,
+  formatCoordinates,
+  formatDate,
+  flattenFacilities,
+  getAllPositions,
+  findFacilityById,
+  getFacilityPath,
+  getAllFacilityPaths
+} from '../../../lib/api';
+
+export async function getStaticPaths() {
+  const artccs = await fetchArtccList();
+  const paths: any[] = [];
+
+  for (const artcc of artccs) {
+    try {
+      const data = await fetchArtcc(artcc.id);
+      const allPaths = getAllFacilityPaths(artcc.id, data.facility);
+
+      for (const item of allPaths) {
+        // For the ARTCC itself, slug is undefined (index)
+        if (item.facilityId === artcc.id) {
+          paths.push({
+            params: { artcc: artcc.id, slug: undefined },
+            props: { artccData: data, facilityId: item.facilityId }
+          });
+        } else {
+          // For child facilities, use their ID as slug
+          paths.push({
+            params: { artcc: artcc.id, slug: item.facilityId },
+            props: { artccData: data, facilityId: item.facilityId }
+          });
+        }
+      }
+    } catch (e) {
+      console.error(`Failed to fetch ${artcc.id}:`, e);
+    }
+  }
+
+  return paths;
+}
+
+const { artcc, slug } = Astro.params;
+const { artccData, facilityId } = Astro.props;
+
+const targetFacilityId = slug || artcc;
+const facility = findFacilityById(artccData.facility, targetFacilityId);
+const breadcrumbPath = getFacilityPath(artccData.facility, targetFacilityId) || [];
+const isArtcc = facility?.type === 'ARTCC';
+
+// Get positions for this specific facility (not children)
+const facilityPositions = facility?.positions || [];
+// Get all positions including children
+const allPositions = facility ? getAllPositions(facility) : [];
+const allFacilities = facility ? flattenFacilities(facility) : [];
+
+// Get STARS/ERAM config from the appropriate level
+const starsConfig = facility?.starsConfiguration;
+const eramConfig = isArtcc ? artccData.eramConfiguration : facility?.eramConfiguration;
+const tdlsConfig = facility?.tdlsConfiguration;
+const asdexConfig = facility?.asdexConfiguration;
+const towerCabConfig = facility?.towerCabConfiguration;
+const flightStripsConfig = facility?.flightStripsConfiguration;
+const neighboringFacilityIds = facility?.neighboringFacilityIds || [];
+const nonNasFacilityIds = facility?.nonNasFacilityIds || [];
+---
+
+<Layout title={facility ? `${facility.name} (${facility.id})` : `Facility ${targetFacilityId}`}>
+  {!facility ? (
+    <div class="bg-notfound/20 border border-notfound rounded-lg p-6 text-center">
+      <h2 class="text-xl font-semibold text-notfound mb-2">Facility Not Found</h2>
+      <p class="text-radar-300">Could not find facility {targetFacilityId}</p>
+      <a href="/" class="inline-block mt-4 px-4 py-2 bg-radar-700 hover:bg-radar-600 rounded-lg text-radar-100 transition-colors">
+        Return Home
+      </a>
+    </div>
+  ) : (
+    <div class="space-y-6">
+      <!-- Breadcrumb -->
+      <nav class="flex items-center gap-2 text-sm text-radar-400 no-print">
+        <a href="/" class="hover:text-blip-400 transition-colors">Home</a>
+        {breadcrumbPath.map((item: any, index: number) => (
+          <>
+            <span>/</span>
+            {index === breadcrumbPath.length - 1 ? (
+              <span class="text-radar-100">{item.id}</span>
+            ) : (
+              <a
+                href={item.type === 'ARTCC' ? `/facility/${artcc}` : `/facility/${artcc}/${item.id}`}
+                class="hover:text-blip-400 transition-colors"
+              >
+                {item.id}
+              </a>
+            )}
+          </>
+        ))}
+      </nav>
+
+      <!-- Header -->
+      <div class="bg-radar-800 rounded-lg border border-radar-600 p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-3 mb-2">
+              <span class="text-3xl font-bold text-blip-500">{facility.id}</span>
+              <span class:list={[
+                'px-2 py-1 rounded text-xs uppercase font-medium',
+                {
+                  'bg-blip-500/20 text-blip-500': facility.type === 'ARTCC',
+                  'bg-mvfr/20 text-mvfr': facility.type === 'TRACON',
+                  'bg-vfr/20 text-vfr': facility.type === 'ATCT',
+                  'bg-radar-600 text-radar-300': !['ARTCC', 'TRACON', 'ATCT'].includes(facility.type),
+                }
+              ]}>{facility.type}</span>
+            </div>
+            <h1 class="text-2xl font-bold text-radar-100">{facility.name}</h1>
+            {isArtcc && (
+              <p class="text-radar-400 text-sm mt-1">Last updated: {formatDate(artccData.lastUpdatedAt)}</p>
+            )}
+          </div>
+          <div class="flex gap-2 no-print">
+            <button id="open-print-modal" class="px-4 py-2 bg-blip-500 hover:bg-blip-400 text-radar-900 rounded-lg font-medium transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print Report
+            </button>
+            {!isArtcc && (
+              <a href={`/facility/${artcc}`} class="px-4 py-2 bg-radar-700 hover:bg-radar-600 text-radar-100 rounded-lg transition-colors">
+                Back to {artcc}
+              </a>
+            )}
+            <a href="/" class="px-4 py-2 bg-radar-700 hover:bg-radar-600 text-radar-100 rounded-lg transition-colors">
+              Home
+            </a>
+          </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6 pt-6 border-t border-radar-600">
+          {facility.childFacilities?.length > 0 && (
+            <div class="text-center">
+              <div class="text-2xl font-bold text-blip-500">{allFacilities.length}</div>
+              <div class="text-xs text-radar-400">Sub-Facilities</div>
+            </div>
+          )}
+          <div class="text-center">
+            <div class="text-2xl font-bold text-blip-500">{facilityPositions.length}</div>
+            <div class="text-xs text-radar-400">Positions</div>
+          </div>
+          {facility.childFacilities?.length > 0 && (
+            <div class="text-center">
+              <div class="text-2xl font-bold text-blip-500">{allPositions.length}</div>
+              <div class="text-xs text-radar-400">Total Positions</div>
+            </div>
+          )}
+          {isArtcc && (
+            <>
+              <div class="text-center">
+                <div class="text-2xl font-bold text-blip-500">{artccData.videoMaps?.length || 0}</div>
+                <div class="text-xs text-radar-400">Video Maps</div>
+              </div>
+              <div class="text-center">
+                <div class="text-2xl font-bold text-blip-500">{artccData.transceivers?.length || 0}</div>
+                <div class="text-xs text-radar-400">Transceivers</div>
+              </div>
+            </>
+          )}
+          {starsConfig && (
+            <div class="text-center">
+              <div class="text-2xl font-bold text-blip-500">{starsConfig.areas?.length || 0}</div>
+              <div class="text-xs text-radar-400">STARS Areas</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="no-print">
+        <nav class="flex flex-wrap gap-2 bg-radar-800 rounded-lg border border-radar-600 p-2" id="tab-nav">
+          {facility.childFacilities?.length > 0 && (
+            <button class="tab-btn active px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="facilities">Sub-Facilities</button>
+          )}
+          <button class:list={["tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors", { "active": !facility.childFacilities?.length }]} data-tab="positions">Positions</button>
+          {starsConfig && (
+            <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="stars">STARS Config</button>
+          )}
+          {tdlsConfig && (
+            <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="tdls">TDLS (Departures)</button>
+          )}
+          {eramConfig && (
+            <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="eram">ERAM Config</button>
+          )}
+          {(flightStripsConfig?.stripBays?.length > 0 || flightStripsConfig?.externalBays?.length > 0) && (
+            <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="flightstrips">Flight Strips</button>
+          )}
+          {(asdexConfig || towerCabConfig) && (
+            <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="tower">Tower/ASDEX</button>
+          )}
+          {(neighboringFacilityIds.length > 0 || nonNasFacilityIds.length > 0) && (
+            <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="neighbors">Neighboring</button>
+          )}
+          {isArtcc && (
+            <>
+              <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="videomaps">Video Maps</button>
+              <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="transceivers">Transceivers</button>
+              <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="tree">Facility Tree</button>
+            </>
+          )}
+          <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-tab="raw">Raw JSON</button>
+        </nav>
+      </div>
+
+      <!-- Tab Content -->
+      <div id="tab-content">
+        <!-- Sub-Facilities Tab -->
+        {facility.childFacilities?.length > 0 && (
+          <section id="tab-facilities" class="tab-panel print-section" data-print-label="Sub-Facilities">
+            <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+              <h2 class="text-xl font-semibold text-radar-100 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+                Sub-Facilities ({facility.childFacilities.length})
+              </h2>
+              <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {facility.childFacilities.map((child: any) => (
+                  <a
+                    href={`/facility/${artcc}/${child.id}`}
+                    class="bg-radar-700 hover:bg-radar-600 rounded-lg p-4 border border-radar-600 hover:border-blip-500 transition-all group"
+                  >
+                    <div class="flex items-center gap-3 mb-2">
+                      <span class:list={[
+                        'px-2 py-0.5 rounded text-xs font-medium',
+                        {
+                          'bg-mvfr/20 text-mvfr': child.type === 'TRACON',
+                          'bg-vfr/20 text-vfr': child.type === 'ATCT',
+                          'bg-radar-600 text-radar-300': !['TRACON', 'ATCT'].includes(child.type),
+                        }
+                      ]}>{child.type}</span>
+                      <span class="font-mono text-blip-500 group-hover:text-blip-400 font-medium">{child.id}</span>
+                    </div>
+                    <div class="text-radar-100 font-medium">{child.name}</div>
+                    <div class="text-radar-400 text-sm mt-2">
+                      {child.positions?.length || 0} positions
+                      {child.childFacilities?.length > 0 && ` • ${child.childFacilities.length} sub-facilities`}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <!-- Positions Tab -->
+        <section id="tab-positions" class:list={["tab-panel print-section", { "hidden": facility.childFacilities?.length > 0 }]} data-print-label="Positions">
+          <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xl font-semibold text-radar-100 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                </svg>
+                Positions ({facilityPositions.length})
+              </h2>
+              <input
+                type="text"
+                placeholder="Search positions..."
+                class="no-print px-3 py-2 bg-radar-700 border border-radar-600 rounded-lg text-radar-100 placeholder-radar-500 text-sm focus:outline-none focus:border-blip-500"
+                id="position-search"
+              />
+            </div>
+            {facilityPositions.length > 0 ? (
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-radar-600">
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">Callsign</th>
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">Name</th>
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">Radio Name</th>
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">Frequency</th>
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">Starred</th>
+                    </tr>
+                  </thead>
+                  <tbody id="positions-table">
+                    {facilityPositions.map((pos: any) => (
+                      <tr class="border-b border-radar-700 hover:bg-radar-700/50 position-row" data-search={`${pos.callsign} ${pos.name} ${pos.radioName}`.toLowerCase()}>
+                        <td class="py-3 px-4 font-mono text-blip-500">{pos.callsign}</td>
+                        <td class="py-3 px-4 text-radar-100">{pos.name}</td>
+                        <td class="py-3 px-4 text-radar-300">{pos.radioName}</td>
+                        <td class="py-3 px-4 font-mono text-radar-200">{formatFrequency(pos.frequency)}</td>
+                        <td class="py-3 px-4">
+                          {pos.starred ? (
+                            <span class="text-configured">★</span>
+                          ) : (
+                            <span class="text-radar-500">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p class="text-radar-400">No positions defined directly on this facility.</p>
+            )}
+          </div>
+        </section>
+
+        <!-- STARS Config Tab -->
+        {starsConfig && (
+          <section id="tab-stars" class="tab-panel hidden print-section" data-print-label="STARS Configuration">
+            <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+              <h2 class="text-xl font-semibold text-radar-100 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                STARS Configuration
+              </h2>
+
+              <div class="space-y-6">
+                <!-- Areas -->
+                {starsConfig.areas?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Areas ({starsConfig.areas.length})</h3>
+                    <div class="grid md:grid-cols-2 gap-4">
+                      {starsConfig.areas.map((area: any) => (
+                        <div class="bg-radar-700 rounded-lg p-4 border border-radar-600">
+                          <div class="flex items-center gap-2 mb-2">
+                            <span class="font-mono text-blip-500 font-medium">{area.id}</span>
+                            <span class="text-radar-100">{area.name}</span>
+                          </div>
+                          <div class="text-radar-400 text-sm space-y-1">
+                            <div>Range: {area.surveillanceRange} nm</div>
+                            {area.underlyingAirports?.length > 0 && (
+                              <div>Airports: {area.underlyingAirports.join(', ')}</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <!-- Internal Airports -->
+                {starsConfig.internalAirports?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Internal Airports ({starsConfig.internalAirports.length})</h3>
+                    <div class="flex flex-wrap gap-2">
+                      {starsConfig.internalAirports.map((apt: string) => (
+                        <span class="px-3 py-1 bg-radar-700 border border-radar-600 rounded font-mono text-blip-400 text-sm">{apt}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <!-- Beacon Code Banks -->
+                {starsConfig.beaconCodeBanks?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Beacon Code Banks ({starsConfig.beaconCodeBanks.length})</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {starsConfig.beaconCodeBanks.map((bank: any) => (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="font-mono text-blip-500">{bank.id}</div>
+                          <div class="text-radar-300 text-sm">{bank.type}</div>
+                          <div class="text-radar-400 text-xs font-mono">{bank.start} - {bank.end}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <!-- TDLS Config Tab -->
+        {tdlsConfig && (
+          <section id="tab-tdls" class="tab-panel hidden print-section" data-print-label="TDLS (Departures)">
+            <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+              <h2 class="text-xl font-semibold text-radar-100 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+                TDLS Configuration (Departures)
+              </h2>
+
+              <div class="space-y-6">
+                <!-- SIDs -->
+                {tdlsConfig.sids?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">SIDs ({tdlsConfig.sids.length})</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {tdlsConfig.sids.map((sid: any) => (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="font-mono text-blip-500 font-medium">{sid.name}</div>
+                          <div class="text-radar-400 text-xs mt-1">ID: {sid.id}</div>
+                          {sid.transitions?.length > 0 && (
+                            <div class="text-radar-300 text-sm mt-2">
+                              Transitions: {sid.transitions.map((t: any) => t.name).join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <!-- Departure Frequencies -->
+                {tdlsConfig.depFreqs?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Departure Frequencies ({tdlsConfig.depFreqs.length})</h3>
+                    <div class="flex flex-wrap gap-2">
+                      {tdlsConfig.depFreqs.map((freq: any) => (
+                        <span class="px-3 py-1 bg-radar-700 border border-radar-600 rounded text-radar-200 text-sm">
+                          <span class="font-mono text-blip-400">{freq.id}</span>: {freq.value}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <!-- Initial Altitudes -->
+                {tdlsConfig.initialAlts?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Initial Altitudes ({tdlsConfig.initialAlts.length})</h3>
+                    <div class="flex flex-wrap gap-2">
+                      {tdlsConfig.initialAlts.map((alt: any) => (
+                        <span class="px-3 py-1 bg-radar-700 border border-radar-600 rounded text-radar-200 text-sm">
+                          <span class="font-mono text-blip-400">{alt.id}</span>: {alt.value}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <!-- ERAM Config Tab -->
+        {eramConfig && (
+          <section id="tab-eram" class="tab-panel hidden print-section" data-print-label="ERAM Configuration">
+            <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+              <h2 class="text-xl font-semibold text-radar-100 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                ERAM Configuration
+              </h2>
+
+              <div class="space-y-6">
+                <!-- Sectors -->
+                {eramConfig.sectors?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Sectors ({eramConfig.sectors.length})</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {eramConfig.sectors.map((sector: any) => (
+                        <div class="bg-radar-700 rounded-lg p-4 border border-radar-600">
+                          <div class="font-mono text-blip-500 font-medium">{sector.id}</div>
+                          <div class="text-radar-100 text-sm">{sector.name}</div>
+                          <div class="text-radar-400 text-xs mt-1">Area: {sector.areaId}</div>
+                          {sector.primaryAirports?.length > 0 && (
+                            <div class="text-radar-400 text-xs">Primary: {sector.primaryAirports.join(', ')}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <!-- Beacon Code Banks -->
+                {eramConfig.beaconCodeBanks?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Beacon Code Banks ({eramConfig.beaconCodeBanks.length})</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {eramConfig.beaconCodeBanks.map((bank: any) => (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="font-mono text-blip-500">{bank.id}</div>
+                          <div class="text-radar-300 text-sm">{bank.type}</div>
+                          <div class="text-radar-400 text-xs font-mono">{bank.start} - {bank.end}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <!-- Internal Airports -->
+                {eramConfig.internalAirports?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Internal Airports ({eramConfig.internalAirports.length})</h3>
+                    <div class="flex flex-wrap gap-2">
+                      {eramConfig.internalAirports.map((apt: string) => (
+                        <span class="px-3 py-1 bg-radar-700 border border-radar-600 rounded font-mono text-blip-400 text-sm">{apt}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <!-- Airways -->
+                {eramConfig.airways?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Airways ({eramConfig.airways.length})</h3>
+                    <div class="flex flex-wrap gap-2">
+                      {eramConfig.airways.slice(0, 50).map((airway: any) => (
+                        <span class="px-2 py-1 bg-radar-700 border border-radar-600 rounded text-radar-300 text-xs">{airway.id}</span>
+                      ))}
+                      {eramConfig.airways.length > 50 && (
+                        <span class="px-2 py-1 bg-radar-600 rounded text-radar-400 text-xs">+{eramConfig.airways.length - 50} more</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <!-- Flight Strips Tab -->
+        {(flightStripsConfig?.stripBays?.length > 0 || flightStripsConfig?.externalBays?.length > 0) && (
+          <section id="tab-flightstrips" class="tab-panel hidden print-section" data-print-label="Flight Strips">
+            <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+              <h2 class="text-xl font-semibold text-radar-100 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Flight Strips Configuration
+              </h2>
+
+              <div class="space-y-6">
+                <!-- Settings -->
+                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                    <div class="text-radar-400 text-xs uppercase mb-1">Arrival Strips</div>
+                    <div class={flightStripsConfig.enableArrivalStrips ? "text-detected" : "text-radar-500"}>
+                      {flightStripsConfig.enableArrivalStrips ? "Enabled" : "Disabled"}
+                    </div>
+                  </div>
+                  <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                    <div class="text-radar-400 text-xs uppercase mb-1">Show Barcodes</div>
+                    <div class={flightStripsConfig.displayBarcodes ? "text-detected" : "text-radar-500"}>
+                      {flightStripsConfig.displayBarcodes ? "Yes" : "No"}
+                    </div>
+                  </div>
+                  <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                    <div class="text-radar-400 text-xs uppercase mb-1">Show Destination</div>
+                    <div class={flightStripsConfig.displayDestinationAirportIds ? "text-detected" : "text-radar-500"}>
+                      {flightStripsConfig.displayDestinationAirportIds ? "Yes" : "No"}
+                    </div>
+                  </div>
+                  <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                    <div class="text-radar-400 text-xs uppercase mb-1">Separate Printers</div>
+                    <div class={flightStripsConfig.enableSeparateArrDepPrinters ? "text-detected" : "text-radar-500"}>
+                      {flightStripsConfig.enableSeparateArrDepPrinters ? "Yes" : "No"}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Strip Bays -->
+                {flightStripsConfig.stripBays?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Strip Bays ({flightStripsConfig.stripBays.length})</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {flightStripsConfig.stripBays.map((bay: any) => (
+                        <div class="bg-radar-700 rounded-lg p-4 border border-radar-600">
+                          <div class="font-mono text-blip-500 font-medium">{bay.id}</div>
+                          <div class="text-radar-100 text-sm">{bay.name}</div>
+                          <div class="text-radar-400 text-xs mt-1">{bay.numberOfRacks} rack(s)</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <!-- External Bays -->
+                {flightStripsConfig.externalBays?.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">External Bays ({flightStripsConfig.externalBays.length})</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {flightStripsConfig.externalBays.map((bay: any) => (
+                        <div class="bg-radar-700 rounded-lg p-4 border border-radar-600">
+                          <div class="font-mono text-blip-500 font-medium">{bay.id}</div>
+                          <div class="text-radar-100 text-sm">{bay.name}</div>
+                          <div class="text-radar-400 text-xs mt-1">Facility: {bay.facilityId}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <!-- Tower/ASDEX Tab -->
+        {(asdexConfig || towerCabConfig) && (
+          <section id="tab-tower" class="tab-panel hidden print-section" data-print-label="Tower / ASDEX">
+            <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+              <h2 class="text-xl font-semibold text-radar-100 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+                Tower / ASDEX Configuration
+              </h2>
+
+              <div class="space-y-6">
+                <!-- Tower Cab Config -->
+                {towerCabConfig && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Tower Cab Display</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {towerCabConfig.videoMapId && (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="text-radar-400 text-xs uppercase mb-1">Video Map</div>
+                          <div class="font-mono text-blip-400">{towerCabConfig.videoMapId}</div>
+                        </div>
+                      )}
+                      {towerCabConfig.defaultRotation !== undefined && (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="text-radar-400 text-xs uppercase mb-1">Default Rotation</div>
+                          <div class="text-radar-100">{towerCabConfig.defaultRotation}°</div>
+                        </div>
+                      )}
+                      {towerCabConfig.defaultZoomRange !== undefined && (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="text-radar-400 text-xs uppercase mb-1">Default Zoom</div>
+                          <div class="text-radar-100">{towerCabConfig.defaultZoomRange}</div>
+                        </div>
+                      )}
+                      {towerCabConfig.aircraftVisibilityCeiling !== undefined && (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="text-radar-400 text-xs uppercase mb-1">Visibility Ceiling</div>
+                          <div class="text-radar-100">{towerCabConfig.aircraftVisibilityCeiling} ft</div>
+                        </div>
+                      )}
+                    </div>
+                    {towerCabConfig.towerLocation && (
+                      <div class="mt-3 bg-radar-700 rounded-lg p-3 border border-radar-600 inline-block">
+                        <div class="text-radar-400 text-xs uppercase mb-1">Tower Location</div>
+                        <div class="font-mono text-radar-200 text-sm">
+                          {formatCoordinates(towerCabConfig.towerLocation.lat, towerCabConfig.towerLocation.lon)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <!-- ASDEX Config -->
+                {asdexConfig && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">ASDEX (Surface Detection)</h3>
+                    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {asdexConfig.videoMapId && (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="text-radar-400 text-xs uppercase mb-1">Video Map</div>
+                          <div class="font-mono text-blip-400">{asdexConfig.videoMapId}</div>
+                        </div>
+                      )}
+                      {asdexConfig.defaultRotation !== undefined && (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="text-radar-400 text-xs uppercase mb-1">Default Rotation</div>
+                          <div class="text-radar-100">{asdexConfig.defaultRotation}°</div>
+                        </div>
+                      )}
+                      {asdexConfig.targetVisibilityRange !== undefined && (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="text-radar-400 text-xs uppercase mb-1">Visibility Range</div>
+                          <div class="text-radar-100">{asdexConfig.targetVisibilityRange} nm</div>
+                        </div>
+                      )}
+                      {asdexConfig.targetVisibilityCeiling !== undefined && (
+                        <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                          <div class="text-radar-400 text-xs uppercase mb-1">Visibility Ceiling</div>
+                          <div class="text-radar-100">{asdexConfig.targetVisibilityCeiling} ft</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <!-- Runway Configurations -->
+                    {asdexConfig.runwayConfigurations?.length > 0 && (
+                      <div class="mt-4">
+                        <h4 class="text-md font-medium text-radar-300 mb-2">Runway Configurations ({asdexConfig.runwayConfigurations.length})</h4>
+                        <div class="grid md:grid-cols-2 gap-3">
+                          {asdexConfig.runwayConfigurations.map((config: any) => (
+                            <div class="bg-radar-700 rounded-lg p-3 border border-radar-600">
+                              <div class="font-mono text-blip-500">{config.id}</div>
+                              {config.runways?.length > 0 && (
+                                <div class="text-radar-300 text-sm mt-1">
+                                  Runways: {config.runways.map((r: any) => r.id).join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <!-- Neighboring Facilities Tab -->
+        {(neighboringFacilityIds.length > 0 || nonNasFacilityIds.length > 0) && (
+          <section id="tab-neighbors" class="tab-panel hidden print-section" data-print-label="Neighboring Facilities">
+            <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+              <h2 class="text-xl font-semibold text-radar-100 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Neighboring Facilities
+              </h2>
+
+              <div class="space-y-6">
+                <!-- Neighboring Facilities -->
+                {neighboringFacilityIds.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Neighboring Facilities ({neighboringFacilityIds.length})</h3>
+                    <p class="text-radar-400 text-sm mb-3">Facilities that coordinate with this facility for handoffs and operations.</p>
+                    <div class="flex flex-wrap gap-2">
+                      {neighboringFacilityIds.map((id: string) => (
+                        <a
+                          href={`/facility/${artcc}/${id}`}
+                          class="px-4 py-2 bg-radar-700 hover:bg-radar-600 border border-radar-600 hover:border-blip-500 rounded-lg font-mono text-blip-400 hover:text-blip-300 transition-colors"
+                        >
+                          {id}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <!-- Non-NAS Facilities -->
+                {nonNasFacilityIds.length > 0 && (
+                  <div>
+                    <h3 class="text-lg font-medium text-radar-200 mb-3">Non-NAS Facilities ({nonNasFacilityIds.length})</h3>
+                    <p class="text-radar-400 text-sm mb-3">Facilities outside the National Airspace System that interact with this facility.</p>
+                    <div class="flex flex-wrap gap-2">
+                      {nonNasFacilityIds.map((id: string) => (
+                        <span class="px-4 py-2 bg-radar-700 border border-radar-600 rounded-lg font-mono text-configured">
+                          {id}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <!-- Video Maps Tab (ARTCC only) -->
+        {isArtcc && (
+          <section id="tab-videomaps" class="tab-panel hidden print-section" data-print-label="Video Maps">
+            <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-radar-100 flex items-center gap-2">
+                  <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                  Video Maps ({artccData.videoMaps?.length || 0})
+                </h2>
+                <input
+                  type="text"
+                  placeholder="Search video maps..."
+                  class="no-print px-3 py-2 bg-radar-700 border border-radar-600 rounded-lg text-radar-100 placeholder-radar-500 text-sm focus:outline-none focus:border-blip-500"
+                  id="videomap-search"
+                />
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-radar-600">
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">ID</th>
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">Name</th>
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">Tags</th>
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">STARS ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(artccData.videoMaps || []).map((vm: any) => (
+                      <tr class="border-b border-radar-700 hover:bg-radar-700/50 videomap-row" data-search={`${vm.id} ${vm.name} ${vm.tags?.join(' ') || ''}`.toLowerCase()}>
+                        <td class="py-3 px-4 font-mono text-blip-500">{vm.id}</td>
+                        <td class="py-3 px-4 text-radar-100">{vm.name}</td>
+                        <td class="py-3 px-4">
+                          <div class="flex flex-wrap gap-1">
+                            {(vm.tags || []).slice(0, 3).map((tag: string) => (
+                              <span class="px-2 py-0.5 bg-radar-700 rounded text-xs text-radar-300">{tag}</span>
+                            ))}
+                            {(vm.tags || []).length > 3 && (
+                              <span class="px-2 py-0.5 bg-radar-600 rounded text-xs text-radar-400">+{vm.tags.length - 3}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td class="py-3 px-4 font-mono text-radar-200">{vm.starsId || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <!-- Transceivers Tab (ARTCC only) -->
+        {isArtcc && (
+          <section id="tab-transceivers" class="tab-panel hidden print-section" data-print-label="Transceivers">
+            <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-radar-100 flex items-center gap-2">
+                  <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.636 18.364a9 9 0 010-12.728m12.728 0a9 9 0 010 12.728m-9.9-2.829a5 5 0 010-7.07m7.072 0a5 5 0 010 7.07M13 12a1 1 0 11-2 0 1 1 0 012 0z" />
+                  </svg>
+                  Transceivers ({artccData.transceivers?.length || 0})
+                </h2>
+                <input
+                  type="text"
+                  placeholder="Search transceivers..."
+                  class="no-print px-3 py-2 bg-radar-700 border border-radar-600 rounded-lg text-radar-100 placeholder-radar-500 text-sm focus:outline-none focus:border-blip-500"
+                  id="transceiver-search"
+                />
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-radar-600">
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">ID</th>
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">Name</th>
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">Frequency</th>
+                      <th class="text-left py-3 px-4 text-radar-300 font-medium">Location</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(artccData.transceivers || []).map((tx: any) => (
+                      <tr class="border-b border-radar-700 hover:bg-radar-700/50 transceiver-row" data-search={`${tx.id} ${tx.name}`.toLowerCase()}>
+                        <td class="py-3 px-4 font-mono text-blip-500">{tx.id}</td>
+                        <td class="py-3 px-4 text-radar-100">{tx.name}</td>
+                        <td class="py-3 px-4 font-mono text-radar-200">{formatFrequency(tx.frequency)}</td>
+                        <td class="py-3 px-4 font-mono text-radar-300 text-xs">{formatCoordinates(tx.latDeg, tx.lonDeg)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <!-- Facility Tree Tab (ARTCC only) -->
+        {isArtcc && (
+          <section id="tab-tree" class="tab-panel hidden print-section" data-print-label="Facility Tree">
+            <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 print-avoid-break">
+              <h2 class="text-xl font-semibold text-radar-100 mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+                Full Facility Tree ({allFacilities.length} facilities)
+              </h2>
+              <p class="text-radar-400 text-sm mb-4">
+                Complete hierarchy of all facilities under {artccData.facility.id}. Click any facility to view its details.
+              </p>
+              <div class="space-y-1 max-h-[600px] overflow-y-auto">
+                <FacilityTree facility={artccData.facility} artccId={artcc} currentFacilityId={targetFacilityId} />
+              </div>
+            </div>
+          </section>
+        )}
+
+        <!-- Raw JSON Tab -->
+        <section id="tab-raw" class="tab-panel hidden">
+          <div class="bg-radar-800 rounded-lg border border-radar-600 p-6">
+            <h2 class="text-xl font-semibold text-radar-100 mb-4 flex items-center gap-2">
+              <svg class="w-5 h-5 text-blip-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+              </svg>
+              Raw JSON Data
+            </h2>
+            <div class="bg-radar-900 rounded-lg p-4 overflow-x-auto max-h-[600px]">
+              <pre class="text-xs text-radar-300 font-mono whitespace-pre-wrap">{JSON.stringify(facility, null, 2)}</pre>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  )}
+
+  <!-- Print Selection Modal -->
+  <div id="print-modal" class="fixed inset-0 bg-radar-900/80 backdrop-blur-sm z-50 hidden items-center justify-center no-print">
+    <div class="bg-radar-800 rounded-lg border border-radar-600 p-6 max-w-md w-full mx-4 shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-radar-100">Select Sections to Print</h3>
+        <button id="close-print-modal" class="text-radar-400 hover:text-radar-200 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div id="print-sections-list" class="space-y-2 max-h-64 overflow-y-auto mb-4">
+        <!-- Populated by JavaScript -->
+      </div>
+
+      <div class="flex items-center justify-between border-t border-radar-600 pt-4">
+        <div class="flex gap-2">
+          <button id="select-all-sections" class="text-sm text-blip-400 hover:text-blip-300 transition-colors">Select All</button>
+          <span class="text-radar-600">|</span>
+          <button id="deselect-all-sections" class="text-sm text-blip-400 hover:text-blip-300 transition-colors">Deselect All</button>
+        </div>
+        <button id="print-selected" class="px-4 py-2 bg-blip-500 hover:bg-blip-400 text-radar-900 rounded-lg font-medium transition-colors flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          Print
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Print Header (only shown when printing) -->
+  <div class="print-header hidden">
+    <h1>{facility?.id} - {facility?.name}</h1>
+    <p>{facility?.type} Facility Report</p>
+  </div>
+</Layout>
+
+<style>
+  .tab-btn {
+    background-color: transparent;
+    color: var(--color-radar-400);
+  }
+  .tab-btn:hover {
+    background-color: var(--color-radar-700);
+    color: var(--color-radar-200);
+  }
+  .tab-btn.active {
+    background-color: var(--color-blip-500);
+    color: var(--color-radar-900);
+  }
+</style>
+
+<script>
+  // Tab switching
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabId = btn.getAttribute('data-tab');
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.add('hidden'));
+      document.getElementById(`tab-${tabId}`)?.classList.remove('hidden');
+    });
+  });
+
+  // Search functionality
+  const setupSearch = (inputId: string, rowClass: string) => {
+    document.getElementById(inputId)?.addEventListener('input', (e) => {
+      const query = (e.target as HTMLInputElement).value.toLowerCase();
+      document.querySelectorAll(`.${rowClass}`).forEach(row => {
+        const searchData = row.getAttribute('data-search') || '';
+        (row as HTMLElement).style.display = searchData.includes(query) ? '' : 'none';
+      });
+    });
+  };
+
+  setupSearch('position-search', 'position-row');
+  setupSearch('videomap-search', 'videomap-row');
+  setupSearch('transceiver-search', 'transceiver-row');
+
+  // Print modal functionality
+  const printModal = document.getElementById('print-modal');
+  const printSectionsList = document.getElementById('print-sections-list');
+  const openPrintModalBtn = document.getElementById('open-print-modal');
+  const closePrintModalBtn = document.getElementById('close-print-modal');
+  const selectAllBtn = document.getElementById('select-all-sections');
+  const deselectAllBtn = document.getElementById('deselect-all-sections');
+  const printSelectedBtn = document.getElementById('print-selected');
+
+  // Populate print sections list
+  function populatePrintSections() {
+    if (!printSectionsList) return;
+    printSectionsList.innerHTML = '';
+
+    document.querySelectorAll('.print-section').forEach((section, index) => {
+      const label = section.getAttribute('data-print-label') || `Section ${index + 1}`;
+      const id = section.id;
+
+      const checkbox = document.createElement('label');
+      checkbox.className = 'flex items-center gap-3 p-2 rounded hover:bg-radar-700 cursor-pointer transition-colors';
+      checkbox.innerHTML = `
+        <input type="checkbox" class="print-section-checkbox w-4 h-4 rounded border-radar-600 bg-radar-700 text-blip-500 focus:ring-blip-500 focus:ring-offset-0" data-section-id="${id}" checked>
+        <span class="text-radar-100">${label}</span>
+      `;
+      printSectionsList.appendChild(checkbox);
+    });
+  }
+
+  // Open modal
+  openPrintModalBtn?.addEventListener('click', () => {
+    populatePrintSections();
+    printModal?.classList.remove('hidden');
+    printModal?.classList.add('flex');
+  });
+
+  // Close modal
+  function closeModal() {
+    printModal?.classList.add('hidden');
+    printModal?.classList.remove('flex');
+  }
+
+  closePrintModalBtn?.addEventListener('click', closeModal);
+  printModal?.addEventListener('click', (e) => {
+    if (e.target === printModal) closeModal();
+  });
+
+  // Select/Deselect all
+  selectAllBtn?.addEventListener('click', () => {
+    document.querySelectorAll('.print-section-checkbox').forEach((cb) => {
+      (cb as HTMLInputElement).checked = true;
+    });
+  });
+
+  deselectAllBtn?.addEventListener('click', () => {
+    document.querySelectorAll('.print-section-checkbox').forEach((cb) => {
+      (cb as HTMLInputElement).checked = false;
+    });
+  });
+
+  // Print selected sections
+  printSelectedBtn?.addEventListener('click', () => {
+    // Remove print-selected from all sections
+    document.querySelectorAll('.print-section').forEach((section) => {
+      section.classList.remove('print-selected');
+    });
+
+    // Add print-selected to checked sections
+    document.querySelectorAll('.print-section-checkbox:checked').forEach((cb) => {
+      const sectionId = (cb as HTMLInputElement).getAttribute('data-section-id');
+      if (sectionId) {
+        document.getElementById(sectionId)?.classList.add('print-selected');
+      }
+    });
+
+    // Close modal and print
+    closeModal();
+    setTimeout(() => window.print(), 100);
+  });
+
+  // Close modal on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !printModal?.classList.contains('hidden')) {
+      closeModal();
+    }
+  });
+</script>
